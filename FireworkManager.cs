@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using SimpleJSON;
 
 public class FireworkManager: MonoBehaviour
 {
@@ -51,16 +50,18 @@ public class FireworkManager: MonoBehaviour
     private Dictionary<string, FireworkClass> fireworkClassDict =
         new Dictionary<string, FireworkClass> ();
 
-    void initFireworkClassDict() {
+    void initFireworkClassDict ()
+    {
         foreach (KeyValuePair<string, string> entry in nameToFileNameDict) {
             string name = entry.Key;
             string fileName = entry.Value;
             FireworkClass firework = new FireworkClass (name, fileName);
             fireworkClassDict.Add (name, firework);
         }
-    }        
+    }
 
-    private class FireworkInstance {
+    private class FireworkInstance
+    {
         private Object constructor;
 
         public GameObject obj = null;
@@ -69,28 +70,32 @@ public class FireworkManager: MonoBehaviour
         public float duration = 0.0f;
         public Vector3 startPostion = Vector3.zero;
 
-        public FireworkInstance(Object aConstructor) {
+        public FireworkInstance (Object aConstructor)
+        {
             this.constructor = aConstructor;
         }
 
-        public void show() {
+        public void show ()
+        {
             if (obj == null) {               
                 obj = Object.Instantiate (constructor, startPostion, Quaternion.identity) as GameObject;
             }
         }
 
-        public void destroy() {
+        public void destroy ()
+        {
             if (obj != null) {
-                Object.Destroy(obj);
+                Object.Destroy (obj);
             }
         }
 
-        ~FireworkInstance() {
-            destroy();
+        ~FireworkInstance ()
+        {
+            destroy ();
         }
     };
 
-    private List<FireworkInstance> instances = new List<FireworkInstance>();
+    private List<FireworkInstance> instances = new List<FireworkInstance> ();
 
     void addFireworkInstance (string name, float startTime, float duration, Vector3 startPosition)
     {
@@ -100,7 +105,8 @@ public class FireworkManager: MonoBehaviour
         }
 
         Object constructor = firework.constructor;
-        FireworkInstance instance = new FireworkInstance(constructor);
+        FireworkInstance instance = new FireworkInstance (constructor);
+        instance.name = name;
         instance.startTime = startTime;
         instance.duration = duration;
         instance.startPostion = startPosition;
@@ -108,26 +114,93 @@ public class FireworkManager: MonoBehaviour
         instances.Add (instance);
     }
 
-    void loadFireworkInstances() {
-        addFireworkInstance("RocketBlueRain1", 2.0f, 5.0f, Vector3.zero);
-        addFireworkInstance("RocketRainbowSparkle2", 4.0f, 5.0f, Vector3.zero);
+    void addFireworkInstance (JSONObject firework)
+    {
+        if (firework.type != JSONObject.Type.OBJECT)
+            return;
+
+        string name;
+        float startTime, duration;
+        Vector3 position;
+
+        if (firework.GetField ("name").type == JSONObject.Type.STRING) {
+            name = firework.GetField ("name").str;
+        } else {
+            return;
+        }
+
+        if (firework.GetField ("start_time").type == JSONObject.Type.NUMBER) {
+            startTime = firework.GetField ("start_time").n;
+        } else {
+            return;
+        }
+
+        if (firework.GetField ("duration").type == JSONObject.Type.NUMBER) {
+            duration = firework.GetField ("duration").n;
+        } else {
+            return;
+        }
+
+        if (firework.GetField ("position").type == JSONObject.Type.OBJECT) {
+            JSONObject p = firework.GetField ("position");
+            if (p.type == JSONObject.Type.OBJECT) {
+                if (p.GetField ("x").type != JSONObject.Type.NUMBER)
+                    return;
+                if (p.GetField ("y").type != JSONObject.Type.NUMBER)
+                    return;
+                if (p.GetField ("z").type != JSONObject.Type.NUMBER)
+                    return;
+
+                position.x = p.GetField ("x").n;
+                position.y = p.GetField ("y").n;
+                position.z = p.GetField ("z").n;
+            } else {
+                return;
+            }
+        } else {
+            return;
+        }
+
+        addFireworkInstance (name, startTime, duration, position); 
     }
-        
+
+    string readFileAsString (string fileName)
+    {
+        TextAsset data= Resources.Load(fileName) as TextAsset;
+        return data.text;
+    }
+
+    void loadFireworksFromJSONString (string jsonStr)
+    {        
+        JSONObject json = new JSONObject (jsonStr);
+
+        if (json.type == JSONObject.Type.OBJECT) {
+            JSONObject fireworks = json.GetField ("fireworks");
+            if (fireworks.type == JSONObject.Type.ARRAY) {
+                foreach (JSONObject firework in fireworks.list) {
+                    addFireworkInstance (firework);
+                }
+            }             
+        }
+    }
+
     void Start ()
     {
-        initFireworkClassDict();
-        loadFireworkInstances();
-    }        
-        
+        initFireworkClassDict ();
+
+        string jsonStr = readFileAsString("data/demo0");       
+        loadFireworksFromJSONString (jsonStr);
+    }
+
     void Update ()
     {
         float now = Time.realtimeSinceStartup;
 
         foreach (FireworkInstance instance in instances) {
             if (now >= instance.startTime && now < instance.startTime + instance.duration) {
-                instance.show();
+                instance.show ();
             } else {
-                instance.destroy();
+                instance.destroy ();
             }
         }
     }
